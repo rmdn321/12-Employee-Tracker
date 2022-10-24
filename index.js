@@ -72,7 +72,7 @@ const addEmployeeQuestions = [
 const chooseEmployeeQuestions = [
   {
     type: "list",
-    name: "employees",
+    name: "employee",
     message: "Choose an Employee: ",
     choices: [],
   },
@@ -107,12 +107,11 @@ async function viewAllDepts() {
   FROM department
   ORDER BY department.id;\n`
     )
-    .then( ([rows,fields]) => {
+    .then(([rows, fields]) => {
       // console.log(rows);
       console.table(rows);
     })
-    .catch(console.log)
-    
+    .catch(console.log);
 }
 
 async function viewAllEmployees() {
@@ -128,12 +127,11 @@ async function viewAllEmployees() {
   FROM employee
   ORDER BY employee.id;\n`
     )
-    .then( ([rows,fields]) => {
+    .then(([rows, fields]) => {
       // console.log(rows);
       console.table(rows);
     })
-    .catch(console.log)
-   
+    .catch(console.log);
 }
 
 async function viewAllRoles() {
@@ -148,48 +146,101 @@ async function viewAllRoles() {
   FROM role
   ORDER BY role.id;\n`
     )
-    .then( ([rows,fields]) => {
+    .then(([rows, fields]) => {
       // console.log(rows);
       console.table(rows);
     })
-    .catch(console.log)
+    .catch(console.log);
 }
 
 async function addDept() {
-  response = await getUserInputs(addDeptQuestions)
-  await db
-    .promise()
-    .query(
-      `\n\n
+  response = await getUserInputs(addDeptQuestions);
+  await db.promise().query(
+    `\n\n
       INSERT INTO department (department_name) VALUES ("${response.department}");\n`
-    )
+  );
 }
 
 async function addRole() {
-  response = await getUserInputs(addRoleQuestions)
-  await db
+  response = await getUserInputs(addRoleQuestions);
+  department = await db
     .promise()
     .query(
-      `\n\n
-      INSERT INTO role (title, salary, department_id) VALUES ("${response.name}", "${response.salary}", "${response.department}");\n`
+      `SELECT department.id , department.department_name 
+  FROM department WHERE department_name = "${response.department}"`
     )
+    .then(([rows, fields]) => {
+      return rows[0];
+    })
+    .catch(console.log);
+
+  await db.promise().query(
+    `\n\n
+      INSERT INTO role (title, salary, department_id) VALUES ("${response.name}", "${response.salary}", "${department.id}");\n`
+  );
 }
 
 async function addEmployee() {
-  response = await getUserInputs(addEmployeeQuestions)
-  await db
-    .promise()
-    .query(
-      `\n\n
-      INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ("${response.firstName}", "${response.lastName}", "${response.role}", "${response.manager}");\n`
-    )
+  response = await getUserInputs(addEmployeeQuestions);
+  roleId = await db.promise().query(
+    `SELECT * FROM role WHERE title = "${response.role}"`
+  ).then (async ([rows, fields]) => {
+    return rows[0].id;
+  })
+  .catch(console.log);
+
+  const name = response.manager.split(" ")
+  managerId = await db.promise().query(
+    `SELECT * FROM employee WHERE first_name = "${name[0]}" AND
+    last_name = "${name[1]}"`
+  ).then (async ([rows, fields]) => {
+    return rows[0].id;
+  })
+  .catch(console.log);
+
+  await db.promise().query(
+    `\n\n
+      INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ("${response.firstName}", "${response.lastName}", "${roleId}", "${managerId}");\n`
+  );
 }
+
+async function updateRole(employeeName) {
+  const name = employeeName.split(" ")
+  employeeId = await db.promise().query(
+    `SELECT * FROM employee WHERE first_name = "${name[0]}" AND
+    last_name = "${name[1]}"`
+  ).then (async ([rows, fields]) => {
+    return rows[0].id;
+  })
+  .catch(console.log);
+
+  response = await getUserInputs(updateEmployeeRoleQuestions);
+
+  roleId = await db.promise().query(
+    `SELECT * FROM role WHERE title = "${response.newRole}"`
+  ).then (async ([rows, fields]) => {
+    return rows[0].id;
+  })
+  .catch(console.log);
+  
+  await db.promise().query(
+    `UPDATE employee SET role_id = "${roleId}" WHERE id = "${employeeId}"`
+  );
+}
+
 
 async function chooseEmployee() {
-  response = await getUserInputs(chooseEmployeeQuestions)
+  employeeIds = []
+  chooseEmployeeQuestions[0].choices = await db.promise().query(
+    `SELECT * FROM employee`
+  ).then (async ([rows, fields]) => {
+    return rows.map((row) => row.first_name + " " + row.last_name)
+  })
+  .catch(console.log);
+  response = await getUserInputs(chooseEmployeeQuestions);
+  updateRole(response.employee);
 }
 
-async function updateRole() {}
 
 // TODO: Create a function to initialize app
 async function init() {
@@ -213,13 +264,13 @@ async function init() {
     } else if (response.menu === "6. Add an Employee") {
       await addEmployee();
     } else if (response.menu === "7. Update an Employee Role") {
-      await chooseEmployee();      
+      await chooseEmployee();
     } else {
       console.log("Thank you!");
       break;
     }
   }
-};
+}
 
 // Function call to initialize app
 init();
